@@ -197,6 +197,59 @@ header_error:
 
 
 /***********************************************************************
+// decompress_zynga
+************************************************************************/
+
+static /* const */ char decompress_zynga__doc__[] =
+"decompress_zynga(string) -- Decompress the data in string, returning a string containing the decompressed data.\n"
+;
+
+static PyObject *
+decompress_zynga(PyObject *dummy, PyObject *args)
+{
+    PyObject *result_str;
+    const lzo_bytep in;
+    lzo_bytep out;
+    lzo_uint in_len;
+    lzo_uint out_len;
+    lzo_uint new_len;
+    int len;
+    int err;
+
+    /* init */
+    UNUSED(dummy);
+    if (!PyArg_ParseTuple(args, "s#", &in, &len))
+        return NULL;
+    in_len = len;
+    // The PHP pecl memcache library doesn't store the original size in the payload.
+    //  Just assume worst case.
+    out_len = in_len * 16;
+
+    /* alloc buffers */
+    result_str = PyString_FromStringAndSize(NULL, out_len);
+    if (result_str == NULL)
+        return PyErr_NoMemory();
+
+    /* decompress */
+    out = (lzo_bytep) PyString_AsString(result_str);
+    new_len = out_len;
+    err = lzo1x_decompress_safe(in, in_len, out, &new_len, NULL);
+    if (err != LZO_E_OK)
+    {
+        Py_DECREF(result_str);
+        PyErr_Format(LzoError, "Compressed data violation %i", err);
+        return NULL;
+    }
+
+    /* success */
+    return result_str;
+
+header_error:
+    PyErr_SetString(LzoError, "Header error - invalid compressed data");
+    return NULL;
+}
+
+/***********************************************************************
 // optimize
 ************************************************************************/
 
@@ -323,6 +376,7 @@ static /* const */ PyMethodDef methods[] =
     {"compress",   (PyCFunction)compress,   METH_VARARGS, compress__doc__},
     {"crc32",      (PyCFunction)crc32,      METH_VARARGS, crc32__doc__},
     {"decompress", (PyCFunction)decompress, METH_VARARGS, decompress__doc__},
+    {"decompress_zynga", (PyCFunction)decompress_zynga, METH_VARARGS, decompress_zynga__doc__},
     {"optimize",   (PyCFunction)optimize,   METH_VARARGS, optimize__doc__},
     {NULL, NULL, 0, NULL}
 };
@@ -338,6 +392,7 @@ static /* const */ char module_documentation[]=
 "crc32(string) -- Compute a CRC-32 checksum.\n"
 "crc32(string, start) -- Compute a CRC-32 checksum using a given starting value.\n"
 "decompress(string) -- Decompresses a compressed string.\n"
+"decompress_zynga(string) -- Decompresses a compressed string that was compressed by Zynga's php pecl memcache extension.\n"
 "optimize(string) -- Optimize a compressed string.\n"
 ;
 
